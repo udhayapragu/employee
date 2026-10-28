@@ -94,6 +94,15 @@ neon env pull --services postgres   # writes both URLs to .env.local
 npm run db:migrate              # applies schema versions over the direct connection
 ```
 
+Verify before any write:
+
+```bash
+npm run db:status   # read-only: target database, tables, applied and pending migrations
+npm run db:migrate  # applies pending versions over DATABASE_URL_UNPOOLED (falls back to DATABASE_URL)
+```
+
+`db:status` runs only `SELECT` statements. Check that the target database name matches the Neon console for the `production` branch before you run `db:migrate`.
+
 Each Vercel build runs `vercel-build`, which applies pending migrations before `next build`, so the Vercel environment needs `DATABASE_URL` and, ideally, `DATABASE_URL_UNPOOLED`.
 
 ## Research modes
