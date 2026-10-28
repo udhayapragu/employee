@@ -1,0 +1,223 @@
+# Bulkskart AI
+
+Manufacturer research, lead management, and outreach approvals for Bulkskart.
+
+The application helps the team find candidate manufacturers in permitted sources, organise them as leads, verify them through a defined checklist, prepare outreach drafts in five languages, and route every draft through a second-person approval. **Nothing is sent by the application.**
+
+## Status at a glance
+
+| Area | State |
+| --- | --- |
+| Authentication, five roles, server-side permission checks | Built and tested |
+| Research jobs (SCOUT) with mock provider | Built and tested |
+| Research with Google Places API | Built (gated, fixture-tested). **Not run against the live API.** Needs a key and terms review |
+| Lead management, lifecycle, verification checklist, notes, history | Built and tested |
+| Duplicate detection (conservative, flag-only) | Built and tested |
+| Outreach drafts (template in five languages, optional AI) | Built and tested. AI path tested with a mocked HTTP client only |
+| Two-person draft approval | Built and tested |
+| CSV export with formula-injection protection | Built and tested |
+| WhatsApp, email sending, calls | **Not implemented** (see Limitations) |
+| Scheduled or background research | **Not implemented**. Jobs run on demand |
+| Deployment to Vercel | **Not done**. Needs your approval and a Neon database |
+
+## Architecture
+
+One Next.js 16 (App Router) application with TypeScript in strict mode. The five logical agents are modules inside it, not separate services.
+
+| Agent | Module | Responsibility |
+| --- | --- | --- |
+| SCOUT | `src/lib/research/` | Research providers, validation, duplicate classification, job runs |
+| CLERK | `src/lib/leads/` | Lead lifecycle, verification procedure, notes, history |
+| PEN | `src/lib/outreach/`, `src/lib/ai/` | Drafts, templates, AI provider abstraction, approval state machine |
+| LEDGER | `src/lib/overview/`, `src/lib/audit/` | Dashboard counts from the database, audit trail |
+| FOREMAN | `src/lib/research/jobs-repository.ts`, `agent_tasks` table | Job state, idempotency keys, quotas and concurrency limits |
+
+Key structure:
+
+```
+db/migrations/           SQL schema (0001_init.sql)
+scripts/                 migrate.ts, create-admin.ts (run with tsx)
+src/app/api/             JSON route handlers (all authorised server-side)
+src/app/(dashboard)/     Server-rendered dashboard pages
+src/lib/                 Domain logic, repositories, security helpers
+src/components/          UI primitives and client-side forms
+tests/unit/              Pure-logic and HTTP-contract tests (no database)
+tests/integration/       Real SQL against Postgres 16, and HTTP routes and pages on top of it
+```
+
+Repositories receive a tagged-template SQL function. Production uses `@neondatabase/serverless`. Integration tests use `pg` with the same SQL, so the tests exercise the production queries.
+
+## Setup
+
+Requirements: Node.js 22 or later, npm, and a Neon PostgreSQL database.
+
+```bash
+npm install
+cp .env.example .env.local        # then fill in values. Never commit .env.local
+npm run db:migrate                # applies db/migrations to DATABASE_URL
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a long passphrase' npm run admin:create
+npm run dev                       # http://localhost:3000
+```
+
+After the first administrator exists, remove `ADMIN_PASSWORD` from your environment. `admin:create` refuses to run if a super administrator already exists.
+
+Without `DATABASE_URL`, the app still starts. Pages show a setup message and `/api/health` reports `degraded`. Nothing leaks configuration details.
+
+### Environment variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes (runtime) | Neon connection string. Server-side only |
+| `RESEARCH_PROVIDER` | No | `mock` (default), `google_places`, or `disabled`. Never falls back silently |
+| `GOOGLE_PLACES_API_KEY` | Only for `google_places` | Server-side key. Billing must be enabled |
+| `AI_PROVIDER` | No | `none` (default, labelled templates) or `anthropic` |
+| `ANTHROPIC_API_KEY` | Only for `anthropic` | Server-side key |
+| `ANTHROPIC_MODEL` | No | Model used for AI drafts |
+| `APP_ORIGIN` | Recommended in production | Public origin, used for same-origin checks |
+| `SESSION_TTL_HOURS` | No | Session lifetime, 1 to 168 (default 12) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Only for `admin:create` | First administrator. Remove afterwards |
+| `TEST_DATABASE_URL` | Only for integration tests | Dedicated test database. Its name must contain `test`, and it must differ from `DATABASE_URL` |
+
+Values are read on the server only. Settings shows integration status as words such as "Configured" or "Key missing". It never displays a value.
+
+## Research modes
+
+- **Mock (default).** Generates deterministic, clearly labelled records named `[SYNTHETIC] ...` on `example.com`. They carry no phone numbers, cannot be verified, and cannot be contacted. Repeating a search reports the same records as duplicates.
+- **Google Places (real).** Uses the documented Places API (New) text search. It cites the Google Maps listing URL and never guesses missing fields. Results are validated and stored as *unverified*. A listing is not proof that a company manufactures anything.
+  - Google Maps Platform terms restrict how long Places content may be stored. Review them before using this in production.
+  - This adapter has been tested with recorded fixture responses only. It has not been run against the live API.
+- **Failures are failures.** If the selected provider cannot run, the request returns unavailable. If it fails mid-job, the job is marked failed with a safe reason. Mock data is never substituted.
+
+Research is limited by server-side rules: 1 to 20 results per job, 10 jobs per user per hour, and at most 2 jobs running at once. The client supplies search parameters only, never a URL to fetch.
+
+## Roles and permissions
+
+Enforced in `src/lib/auth/permissions.ts` and on every server route. Hiding a button in the UI is never the control.
+
+| Permission | Super Admin | Admin | Researcher | Marketing | Viewer |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Overview | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Start research | ✓ | ✓ | ✓ | | |
+| View research history | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Read leads | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Update leads, notes, owner, follow-up | ✓ | ✓ | ✓ | | |
+| Verify leads | ✓ | ✓ | ✓ | | |
+| Export CSV | ✓ | ✓ | ✓ | ✓ | |
+| Create and edit drafts, submit | ✓ | ✓ | | ✓ | |
+| Approve or reject drafts | ✓ | ✓ | | | |
+| Settings and integration status | ✓ | ✓ | | | |
+| User management (reserved) | ✓ | | | | |
+
+Two-person rule: a draft's author can never approve or reject it. This is checked in application code and enforced by a database constraint.
+
+## Lead lifecycle and verification
+
+Statuses: Discovered, Needs Review, Verified, Contact Ready, Outreach Approved, Contacted, Replied, Interested, Registration Started, Registered, Subscription Active, Not Interested, Opted Out, Archived. Allowed transitions are listed in `src/lib/leads/lifecycle.ts`.
+
+- **Verified** is set only through the checklist. It requires three confirmations (source reviewed, identity matches, manufacturing activity shown publicly) and an evidence summary of at least 20 characters. Synthetic records can never be verified. The attestation is recorded in the history.
+- **Contact Ready** requires a verified lead.
+- **Contacted, Replied and Interested** require a written evidence note.
+- **Outreach Approved** is set automatically when a draft is approved.
+- **Registration and Subscription** statuses cannot be set by hand. They will come from genuine application and payment records, which this version does not receive.
+- Opted-out and archived leads are never given outreach drafts.
+
+## Duplicate policy
+
+Conservative and flag-only. The application never merges or deletes records.
+
+- **Skipped as exact duplicates:** same name, state, city and category, or the same source page and business name.
+- **Kept and flagged for review:** the same name in the same state under another category, a similar name in the same state (similarity ≥ 0.92, and differing numbers count as different names), or a shared phone number. Flagged records show the reason and link to the other record. A reviewer can dismiss the flag or archive the duplicate.
+- A shared phone number alone never causes a merge. One number can belong to several businesses.
+
+## Outreach drafts
+
+- Channels: email, WhatsApp message (draft only), and call script for a sales representative. Nothing is sent or dialled.
+- Languages: English, Tamil, Hindi, Telugu, Malayalam. Template text should be checked by a native speaker before use.
+- Template drafts are labelled as templates. AI drafts are labelled as AI and need review. AI output is validated (structure, no guarantee language, links only to `bulkskart.com`). If AI fails, the request fails. It does not quietly fall back.
+- The AI prompt receives the company name, category, state and language. It never receives phone numbers.
+- Approval states: Draft → Pending Review → Approved, Rejected, or Cancelled. Approval only marks text as ready and moves a verified lead to Outreach Approved.
+
+## API
+
+All routes return JSON with `error.code`, `error.message`, and `error.requestId`. Internal details are logged and never returned.
+
+| Method | Path | Permission | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/health` | none | `ok` or `degraded`, database check only |
+| POST | `/api/auth/login` | none | Rate-limited, generic failure message |
+| POST | `/api/auth/logout` | session | Invalidates the server-side session |
+| POST | `/api/research` | research:run | Optional `Idempotency-Key` header. Returns 201, 200 when reused, or 502 on provider failure |
+| GET | `/api/research/jobs` | research:view | Paginated history |
+| GET | `/api/research/jobs/[id]` | research:view | Job with its records |
+| GET | `/api/leads` | lead:read | Filters: `q`, `category`, `state`, `city`, `verification`, `status`, `duplicates`, `researchJobId`. Sort and paging are bounded |
+| GET | `/api/leads/export` | lead:export | CSV, at most 5,000 rows, audited |
+| GET | `/api/leads/[id]` | lead:read | Lead, notes, history |
+| PATCH | `/api/leads/[id]` | per action | Actions: `change_status`, `verify`, `assign`, `follow_up`, `add_note`, `resolve_duplicate`. Unknown fields are rejected |
+| GET, POST | `/api/outreach/drafts` | lead:read, draft:create | Create requires a verified, contactable lead |
+| GET, PATCH | `/api/outreach/drafts/[id]` | per action | Actions: `edit`, `submit`, `approve`, `reject`, `cancel` |
+
+Mutations require a same-origin `Origin` header. Bodies must be JSON and are capped at 16 KB.
+
+## Security controls
+
+- Passwords hashed with scrypt, compared in constant time. Unknown emails take the same time as known ones.
+- Session tokens are random, stored only as SHA-256 hashes, and sent in `httpOnly`, `sameSite=lax`, `secure` (production) cookies. Sign-out deletes the server-side session.
+- Same-origin check on every mutation, using the Origin header against the Host header (or `APP_ORIGIN`).
+- Every database query is parameterised. LIKE wildcards in search are escaped. Sort fields come from a fixed list.
+- Input validated with strict Zod schemas. Provider output is validated again before storage.
+- CSV cells starting with `= + - @ |` (after optional whitespace) are prefixed with an apostrophe.
+- Source URLs must be public `https` addresses without credentials, IP literals, or localhost. The server never fetches them.
+- Security headers: Content-Security-Policy, X-Frame-Options DENY, nosniff, Referrer-Policy, HSTS, Permissions-Policy.
+- Logs are structured JSON. Keys that look sensitive, and connection strings or API key shapes in values, are redacted.
+- Rate limits: login (per email and per address), research requests, drafts, and exports. Research jobs also have database-backed quotas.
+
+## Testing
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm test                          # unit tests; integration tests run when TEST_DATABASE_URL is set
+npm run build
+```
+
+Integration tests need a dedicated Postgres database. They drop and recreate the `public` schema, so the name must contain `test`:
+
+```bash
+TEST_DATABASE_URL=postgres://user:pass@host:5432/bulkskart_test npm run test:integration
+```
+
+What is covered:
+
+- **Unit (165 tests):** input validation and limits, state and category handling, phone and URL normalisation, duplicate classification, mock and Google Places providers (fixture responses, error handling, no key leakage), registry behaviour, role matrix, password hashing, CSRF origin rules, rate limiting, lifecycle and verification rules, draft approval rules, template content (five languages, opt-outs, no guarantee language), AI output validation and the Anthropic adapter (mocked HTTP), CSV injection protection, query parsing, and API error mapping.
+- **Integration against real Postgres 16 (44 tests):** migrations and their idempotency; authentication and session expiry; research runs, repeat runs, idempotency keys, quotas, failure handling; the exact-duplicate constraint under concurrent inserts; possible-duplicate flags; compare-and-set lead updates with audit entries; the database refusing synthetic verification and self-approval; HTTP routes end to end (login, cookies, roles, CSRF, validation, approval flow, export, sign-out); and dashboard pages rendered from real data for different roles.
+
+Not covered by automated browser tests: a Playwright end-to-end suite is not included. The sign-in page was checked by hand in Chromium at 390 px and 1280 px, with no horizontal overflow and no console errors. The dashboard layouts have not been checked in a browser. The live Neon driver path has been type-checked but not run against a Neon endpoint, because no Neon database was available in the build environment.
+
+## Deployment
+
+Not performed. Before deploying:
+
+1. Create the Neon project and set `DATABASE_URL`, `APP_ORIGIN`, and the research and AI variables in Vercel.
+2. Run `npm run db:migrate` against the production branch, after reviewing the migration.
+3. Run `npm run admin:create` once, then remove `ADMIN_PASSWORD`.
+4. Confirm `/api/health` returns `ok`.
+
+Rate limits held in memory are per instance. The database-backed quotas hold across instances.
+
+## Limitations
+
+- No WhatsApp, email, or calling integration. These need official provider onboarding, approved message templates, domain authentication, and recorded opt-ins. No unofficial automation is used.
+- No scheduled or background jobs. Research runs on demand inside the request, with a 30-second route limit.
+- Real research needs a provider that permits this use. The Google Places adapter is implemented but not live-tested, and Google's storage terms apply.
+- Mock records are synthetic and must never be exported as leads for outreach. They are labelled in the export and the UI.
+- Duplicate detection looks at candidates sharing a four-character name prefix in the same state. It can miss a duplicate whose name differs at the start. Missing a duplicate is safer than merging two businesses.
+- User management is command-line only. There is no self-service sign-up and no in-app user administration.
+- Template messages are drafts for human use. They are not reviewed for legal compliance in each jurisdiction. Check consent and opt-out rules before any outreach.
+
+## Decisions that need your approval
+
+1. Create the Neon database and provide `DATABASE_URL` (I cannot create accounts or secrets).
+2. Choose the research source. Google Places needs billing and a storage-terms review. Another permitted provider may be better.
+3. Decide whether AI drafting should be enabled, and provide an Anthropic key if so.
+4. Approve the first production deployment and the initial administrator account.
+5. Confirm the outreach channels and the consent process before any message is sent by a person.
