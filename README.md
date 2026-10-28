@@ -70,6 +70,9 @@ Without `DATABASE_URL`, the app still starts. Pages show a setup message and `/a
 | `DATABASE_URL` | Yes (runtime) | Neon connection string. Server-side only |
 | `MIGRATION_ALLOW_OTHER_SCHEMAS` | Only if approved | Set to `1` to let migrations create `public` tables while application tables exist in another schema. Off by default; the runner refuses otherwise |
 | `DATABASE_URL_UNPOOLED` | Recommended on Neon | Direct (non-pooled) connection. Used for schema migrations; falls back to `DATABASE_URL` |
+| `PREVIEW_PASSWORDLESS_LOGIN` | Temporary, preview only | Set to `1` in the Vercel **Preview** scope to offer a passwordless test sign-in. Ignored unless `VERCEL_ENV` is `preview`, so production never enables it. Remove it when testing ends |
+| `PREVIEW_LOGIN_EMAIL` | With the flag above | Email of an existing, active account to sign in as. The sign-in never creates, changes or resets an account or password |
+| `PREVIEW_PASSWORDLESS_UNTIL` | With the flag above | ISO date (for example `2026-11-04T12:00:00Z`). The sign-in closes by itself after it |
 | `RESEARCH_PROVIDER` | No | `mock` (default), `google_places`, or `disabled`. Never falls back silently |
 | `GOOGLE_PLACES_API_KEY` | Only for `google_places` | Server-side key. Billing must be enabled |
 | `AI_PROVIDER` | No | `none` (default, labelled templates) or `anthropic` |

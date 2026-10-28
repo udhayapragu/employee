@@ -4,6 +4,7 @@ import { LoginForm } from "@/components/login-form";
 import { SetupRequired } from "@/components/setup-required";
 import { Card } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth/access";
+import { previewLoginConfig } from "@/lib/auth/preview-login";
 import { DatabaseNotConfiguredError } from "@/lib/db/client";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -33,7 +34,7 @@ export default async function LoginPage() {
           <p className="mt-2 text-sm text-muted">Sign in to manage research, leads and outreach approvals.</p>
         </div>
         <Card>
-          <LoginForm />
+          <LoginForm previewLogin={previewLoginConfig().enabled} />
         </Card>
         <p className="mt-6 text-center text-xs text-muted">Access is by invitation. Contact an administrator if you need an account.</p>
       </div>

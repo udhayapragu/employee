@@ -5,10 +5,24 @@ import { useState, type FormEvent } from "react";
 import { callApi } from "@/lib/http/client";
 import { buttonClass, fieldClass, labelClass } from "./ui";
 
-export function LoginForm() {
+/** `previewLogin` is true only on a Vercel Preview deployment with the temporary sign-in gate open. */
+export function LoginForm({ previewLogin = false }: { previewLogin?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  async function onPreviewSignIn() {
+    setPending(true);
+    setError(null);
+    const result = await callApi<{ user: { id: string } }>("/api/auth/preview-login", { method: "POST" });
+    if (!result.ok) {
+      setError(result.status === 404 ? "Preview sign-in is not available on this deployment." : result.message);
+      setPending(false);
+      return;
+    }
+    router.replace("/");
+    router.refresh();
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,6 +74,14 @@ export function LoginForm() {
       <button type="submit" disabled={pending} className={`${buttonClass("primary")} w-full`}>
         {pending ? "Signing in..." : "Sign in"}
       </button>
+      {previewLogin ? (
+        <div className="space-y-2 border-t border-line pt-5">
+          <p className="text-xs text-muted">Preview deployment only. Temporary test access, no password.</p>
+          <button type="button" disabled={pending} onClick={onPreviewSignIn} className={`${buttonClass("secondary")} w-full`}>
+            Continue as the preview test account
+          </button>
+        </div>
+      ) : null}
     </form>
   );
 }

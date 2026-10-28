@@ -23,7 +23,7 @@ describe("withApi error mapping", () => {
 
   it("returns validation details without echoing the submitted values", async () => {
     const handler = withApi(async () => {
-      z.object({ limit: z.number().max(20) }).parse({ limit: 999 });
+      z.object({ limit: z.number().max(20) }).parse({ limit: 987654321 });
       return new Response("unreachable");
     });
     const response = await handler(new Request("https://app.test/api/x"));
@@ -31,7 +31,8 @@ describe("withApi error mapping", () => {
     expect(response.status).toBe(400);
     expect(body).toContain("validation_error");
     expect(body).toContain("limit");
-    expect(body).not.toContain("999");
+    // The request ID is random, so the probe value must be one a random ID cannot contain.
+    expect(body).not.toContain("987654321");
   });
 
   it("hides unexpected errors behind a generic 500 with a request ID", async () => {
