@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.url().optional(),
+  // Direct (non-pooled) connection from Neon. Used for schema migrations only.
+  DATABASE_URL_UNPOOLED: z.url().optional(),
   RESEARCH_PROVIDER: z.enum(["mock", "google_places", "disabled"]).default("mock"),
   GOOGLE_PLACES_API_KEY: z.string().min(10).max(200).optional(),
   AI_PROVIDER: z.enum(["none", "anthropic"]).default("none"),

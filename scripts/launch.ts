@@ -31,7 +31,10 @@ function latestMigrationName(): string {
   return files[files.length - 1] ?? "none";
 }
 
-async function importSchema(url: string): Promise<void> {
+async function importSchema(): Promise<void> {
+  // Direct connection for migrations, as in scripts/migrate.ts.
+  const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set.");
   const { client, close } = await openMigrationClient(url);
   try {
     const result = await runMigrations(client, MIGRATIONS_DIR);
@@ -93,7 +96,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  await importSchema(url);
+  await importSchema();
   await bootstrapAdministrator(url);
   startServer(process.env.PORT ?? "3000");
 }

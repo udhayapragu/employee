@@ -17,6 +17,8 @@
     "vercel-build": "tsx scripts/migrate.ts && next build"
   },
   "dependencies": {
+    "@neon/config": "^1.9.5",
+    "@neon/env": "^1.6.6",
     "@neondatabase/serverless": "^1.2.0",
     "next": "16.4.3",
     "pg": "^8.23.1",
