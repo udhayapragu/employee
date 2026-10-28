@@ -13,7 +13,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "admin:create": "tsx scripts/create-admin.ts",
     "launch": "tsx scripts/launch.ts",
-    "launch:prod": "tsx scripts/launch.ts --production"
+    "launch:prod": "tsx scripts/launch.ts --production",
+    "vercel-build": "tsx scripts/migrate.ts && next build"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
