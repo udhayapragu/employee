@@ -1,6 +1,6 @@
 import path from "node:path";
-import { Client } from "@neondatabase/serverless";
 import { runMigrations } from "../src/lib/db/migrations";
+import { openMigrationClient } from "../src/lib/db/sql";
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -9,14 +9,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const client = new Client(url);
-  await client.connect();
+  const { client, close } = await openMigrationClient(url);
   try {
     const result = await runMigrations(client, path.join(process.cwd(), "db", "migrations"));
     const applied = result.applied.length > 0 ? result.applied.join(", ") : "none";
     console.log(`Migrations applied: ${applied}. Already up to date: ${result.alreadyApplied.length}.`);
   } finally {
-    await client.end();
+    await close();
   }
 }
 

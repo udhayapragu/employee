@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { insertAuditLog } from "../src/lib/audit/log";
 import { hashPassword, validatePasswordStrength } from "../src/lib/auth/password";
-import { createNeonSql } from "../src/lib/db/sql";
+import { createSqlForUrl } from "../src/lib/db/sql";
 import { countSuperAdmins, insertUser } from "../src/lib/users/repository";
 
 /**
@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   const passwordProblem = validatePasswordStrength(password);
   if (passwordProblem) throw new Error(`ADMIN_PASSWORD is not acceptable: ${passwordProblem}`);
 
-  const sql = createNeonSql(url);
+  const sql = createSqlForUrl(url);
   if ((await countSuperAdmins(sql)) > 0) {
     throw new Error("A super administrator already exists. This script will not create another.");
   }

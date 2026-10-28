@@ -1,5 +1,5 @@
 import { getEnv } from "@/lib/config/env";
-import { createNeonSql, type SqlTag } from "./sql";
+import { createSqlForUrl, type SqlTag } from "./sql";
 
 export class DatabaseNotConfiguredError extends Error {
   constructor() {
@@ -15,6 +15,6 @@ export function getSql(): SqlTag {
   if (cachedSql) return cachedSql;
   const { DATABASE_URL } = getEnv();
   if (!DATABASE_URL) throw new DatabaseNotConfiguredError();
-  cachedSql = createNeonSql(DATABASE_URL);
+  cachedSql = createSqlForUrl(DATABASE_URL);
   return cachedSql;
 }
