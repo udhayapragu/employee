@@ -10,7 +10,9 @@ async function main(): Promise<void> {
     console.error("DATABASE_URL is not set. Set it in the environment or .env.local, then run again.");
     process.exit(1);
   }
-  console.log(`[migrate] Using ${process.env.DATABASE_URL_UNPOOLED ? "direct" : "configured"} connection.`);
+  // Report the target database name (never the credentials) so it can be matched against the Neon console.
+  const databaseName = decodeURIComponent(new URL(url).pathname.replace(/^\//, "")) || "(default)";
+  console.log(`[migrate] Target database: ${databaseName} (${process.env.DATABASE_URL_UNPOOLED ? "direct" : "configured"} connection).`);
 
   const { client, close } = await openMigrationClient(url);
   try {
