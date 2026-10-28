@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { ALLOW_OTHER_SCHEMAS_ENV, readSnapshot, refusalReason, TARGET_SCHEMA } from "../src/lib/db/migrations";
-import { openMigrationClient } from "../src/lib/db/sql";
+import { openMigrationClient, urlsDisagree } from "../src/lib/db/sql";
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "db", "migrations");
 const MIGRATION_FILE = /^\d{4}_[a-z0-9_]+\.sql$/;
@@ -19,6 +19,14 @@ async function main(): Promise<void> {
   }
   const connection = process.env.DATABASE_URL_UNPOOLED ? "direct" : "configured";
   const allowOtherSchemas = process.env[ALLOW_OTHER_SCHEMAS_ENV] === "1";
+
+  // Same rule as db:migrate: report a mismatch without connecting to either endpoint.
+  const disagreement = urlsDisagree(process.env.DATABASE_URL, process.env.DATABASE_URL_UNPOOLED);
+  if (disagreement) {
+    console.log(`[db-status] Migrate decision: REFUSE. ${disagreement}`);
+    console.log("[db-status] Read-only: no changes were made.");
+    return;
+  }
 
   const { client, close } = await openMigrationClient(url);
   try {

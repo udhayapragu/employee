@@ -104,6 +104,8 @@ npm run db:migrate  # applies pending versions over DATABASE_URL_UNPOOLED (falls
 
 `db:status` runs only `SELECT` statements. Check that the target database name matches the Neon console for the `production` branch before you run `db:migrate`.
 
+When both `DATABASE_URL` and `DATABASE_URL_UNPOOLED` are set, `db:status` and `db:migrate` refuse, before connecting, if they name different Neon endpoints or databases. The pooled and direct URLs for the same branch agree. Set both from the same branch so the app and the migration always change the same database.
+
 Each Vercel build runs `vercel-build`, which applies pending migrations before `next build`, so the Vercel environment needs `DATABASE_URL` and, ideally, `DATABASE_URL_UNPOOLED`.
 
 ## Research modes

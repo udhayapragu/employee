@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { insertAuditLog } from "../src/lib/audit/log";
 import { hashPassword, validatePasswordStrength } from "../src/lib/auth/password";
-import { openMigrationClient, createSqlForUrl } from "../src/lib/db/sql";
+import { createSqlForUrl, openMigrationClient, urlsDisagree } from "../src/lib/db/sql";
 import { ALLOW_OTHER_SCHEMAS_ENV, runMigrations } from "../src/lib/db/migrations";
 import { countSuperAdmins, insertUser } from "../src/lib/users/repository";
 import { z } from "zod";
@@ -35,6 +35,8 @@ async function importSchema(): Promise<void> {
   // Direct connection for migrations, as in scripts/migrate.ts.
   const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
+  const disagreement = urlsDisagree(process.env.DATABASE_URL, process.env.DATABASE_URL_UNPOOLED);
+  if (disagreement) throw new Error(`Refusing to import the schema: ${disagreement}`);
   const { client, close } = await openMigrationClient(url);
   try {
     const result = await runMigrations(client, MIGRATIONS_DIR, {

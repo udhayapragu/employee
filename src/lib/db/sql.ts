@@ -81,3 +81,35 @@ export async function openMigrationClient(connectionString: string): Promise<{ c
     close: () => client.end(),
   };
 }
+
+/** Pooled Neon hostnames carry "-pooler" on the endpoint label. Removing it gives the endpoint both URLs must share. */
+function endpointOf(connectionString: string): { host: string; database: string } | null {
+  try {
+    const url = new URL(connectionString);
+    return {
+      host: url.hostname.replace(/-pooler(?=\.)/, ""),
+      database: decodeURIComponent(url.pathname.replace(/^\//, "")),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns a reason when the application URL and the migration URL do not reach the same Neon endpoint
+ * and database, or null when they agree. When either URL is not set in this environment, nothing is
+ * compared. Returned reasons never include the URLs or their credentials.
+ */
+export function urlsDisagree(runtimeUrl: string | undefined, migrationUrl: string | undefined): string | null {
+  if (!runtimeUrl || !migrationUrl) return null;
+  const runtime = endpointOf(runtimeUrl);
+  const migration = endpointOf(migrationUrl);
+  if (!runtime || !migration) return "A database URL could not be parsed.";
+  if (runtime.host !== migration.host) {
+    return "DATABASE_URL and DATABASE_URL_UNPOOLED point to different Neon endpoints, so the app and the migration would use different databases.";
+  }
+  if (runtime.database !== migration.database) {
+    return "DATABASE_URL and DATABASE_URL_UNPOOLED name different databases on the same endpoint.";
+  }
+  return null;
+}
