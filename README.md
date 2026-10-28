@@ -68,6 +68,7 @@ Without `DATABASE_URL`, the app still starts. Pages show a setup message and `/a
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | Yes (runtime) | Neon connection string. Server-side only |
+| `MIGRATION_ALLOW_OTHER_SCHEMAS` | Only if approved | Set to `1` to let migrations create `public` tables while application tables exist in another schema. Off by default; the runner refuses otherwise |
 | `DATABASE_URL_UNPOOLED` | Recommended on Neon | Direct (non-pooled) connection. Used for schema migrations; falls back to `DATABASE_URL` |
 | `RESEARCH_PROVIDER` | No | `mock` (default), `google_places`, or `disabled`. Never falls back silently |
 | `GOOGLE_PLACES_API_KEY` | Only for `google_places` | Server-side key. Billing must be enabled |

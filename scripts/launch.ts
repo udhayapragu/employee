@@ -4,7 +4,7 @@ import path from "node:path";
 import { insertAuditLog } from "../src/lib/audit/log";
 import { hashPassword, validatePasswordStrength } from "../src/lib/auth/password";
 import { openMigrationClient, createSqlForUrl } from "../src/lib/db/sql";
-import { runMigrations } from "../src/lib/db/migrations";
+import { ALLOW_OTHER_SCHEMAS_ENV, runMigrations } from "../src/lib/db/migrations";
 import { countSuperAdmins, insertUser } from "../src/lib/users/repository";
 import { z } from "zod";
 
@@ -37,7 +37,9 @@ async function importSchema(): Promise<void> {
   if (!url) throw new Error("DATABASE_URL is not set.");
   const { client, close } = await openMigrationClient(url);
   try {
-    const result = await runMigrations(client, MIGRATIONS_DIR);
+    const result = await runMigrations(client, MIGRATIONS_DIR, {
+      allowOtherSchemas: process.env[ALLOW_OTHER_SCHEMAS_ENV] === "1",
+    });
     const applied = result.applied.length > 0 ? result.applied.join(", ") : "none";
     console.log(`[launch] Schema imported. Newly applied: ${applied}. Schema version: ${latestMigrationName()}.`);
   } finally {
