@@ -50,6 +50,8 @@ describe.skipIf(!TEST_DATABASE_URL)("migration runner against real Postgres", ()
   });
 
   afterAll(async () => {
+    // Other integration files run next against this database, so leave no role schema behind.
+    await pool?.query("DROP SCHEMA IF EXISTS owner_schema CASCADE");
     await pool?.end();
   });
 
@@ -107,5 +109,20 @@ describe.skipIf(!TEST_DATABASE_URL)("migration runner against real Postgres", ()
     await pool.query("CREATE TABLE public.users (id integer)");
     await expect(migrateOn(pool)).rejects.toThrow("does not list 0001_init.sql");
     expect(await tablesIn(pool, "public")).toEqual(["users"]);
+  });
+
+  it("refuses when public.users is a view, creates nothing, and does not report it as a table", async () => {
+    await pool.query("CREATE VIEW public.users AS SELECT 1 AS id");
+    await expect(migrateOn(pool)).rejects.toThrow("public has objects that are not tables: public.users (view)");
+    expect(await tablesIn(pool, "public")).toEqual([]);
+    const ledger = await pool.query("SELECT to_regclass('public.schema_migrations') AS name");
+    expect(ledger.rows[0].name).toBeNull();
+  });
+
+  it("refuses when a view named users in another schema would be found first, and creates nothing in public", async () => {
+    await pool.query("CREATE SCHEMA owner_schema");
+    await pool.query("CREATE VIEW owner_schema.users AS SELECT 1 AS id");
+    await expect(migrateOn(pool, { searchPath: "owner_schema, public" })).rejects.toThrow("owner_schema.users (view)");
+    expect(await tablesIn(pool, "public")).toEqual([]);
   });
 });

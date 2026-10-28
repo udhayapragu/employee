@@ -44,9 +44,13 @@ async function main(): Promise<void> {
     const schemaSummary = bySchema.rows.map((row) => `${String(row.schemaname)}=${String(row.tables)}`).join(", ");
     console.log(`[db-status] Target database: ${String(database.rows[0].name)} (${connection} connection).`);
     console.log(`[db-status] Tables by schema: ${schemaSummary || "none"}.`);
+    const relationState = (name: string, isTable: boolean): string => {
+      if (isTable) return "table present";
+      return snapshot.publicNonTableObjects.some((object) => object.startsWith(`${TARGET_SCHEMA}.${name} `)) ? "not a table" : "absent";
+    };
     console.log(
-      `[db-status] Migrations use schema ${TARGET_SCHEMA}: ledger ${snapshot.publicLedgerExists ? "present" : "absent"}, ` +
-        `${TARGET_SCHEMA}.users ${snapshot.publicCanaryExists ? "present" : "absent"}.`,
+      `[db-status] Migrations use schema ${TARGET_SCHEMA}: ledger ${relationState("schema_migrations", snapshot.publicLedgerExists)}, ` +
+        `${TARGET_SCHEMA}.users ${relationState("users", snapshot.publicCanaryExists)}.`,
     );
     console.log(`[db-status] Applied: ${snapshot.appliedVersions.length > 0 ? snapshot.appliedVersions.join(", ") : "none"}.`);
     console.log(`[db-status] Pending: ${pending.length > 0 ? pending.join(", ") : "none"}.`);
